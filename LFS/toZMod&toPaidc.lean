@@ -4,6 +4,9 @@ GOAL: prove `ℤ⟦X⟧⧸(X-p) ≃ ℤ_[p]`
 Two possible approaches:
 1. Direcly prove the surj. and compute the ker.
 2. by realising `ℤ⟦X⟧⧸(X-p)` as a proj lim.
+
+Issue:
+1. Perhaps `LSZ.quotHom` should be re-define.
 -/
 
 import LFS.Xadic
@@ -29,6 +32,7 @@ example (f_surj : ∀k : ℕ, Function.Surjective (f k)):
 end padic
 
 namespace PSZ
+-- `PSZ`stands for `PowerSeries ℤ`.
 
 section toZMod
 -- The homomorphism `ℤ⟦X⟧ → ℤ ⧸ a ^ n` mapping `X` to `a`.
@@ -36,22 +40,20 @@ def toZModPow (a n : ℕ) : PowerSeries ℤ →+* ZMod (a ^ n) :=
   eval₂RingHom (Int.castRingHom (ZMod (a ^ n))) ⟨a, nat_mod_pow_nilp⟩
 
 @[simp]
-lemma aux2 {a n : ℕ} : (toZModPow a n) X = (a : ZMod (a ^ n)) := by
+lemma toZModPow_X {a n : ℕ} : (toZModPow a n) X = (a : ZMod (a ^ n)) := by
   simp only [toZModPow, eval₂RingHom, eval₂AddMonoidHom, RingHom.coe_mk, MonoidHom.coe_mk,
     OneHom.coe_mk, eval₂_X]
 
 theorem toZModPow_surj {a n : ℕ} [NeZero a]:
     Function.Surjective (toZModPow a n) :=
-  fun b ↦ ⟨C _ (ZMod.val b),
-    by simp only [ZMod.nat_cast_val, eq_intCast, ZMod.int_cast_cast, ZMod.ringHom_map_cast]⟩
+  fun b ↦ ⟨C _ (ZMod.val b), by simp only [ZMod.nat_cast_val, eq_intCast, ZMod.int_cast_cast, ZMod.ringHom_map_cast]⟩
 
 theorem toZModPow_compat {a : ℕ}:
     ∀ (m n : ℕ) (mlen : m ≤ n),
       (ZMod.castHom (pow_dvd_pow a mlen) (ZMod (a ^ m))).comp (toZModPow a n) = (toZModPow a m) := by
-  intro m n mlen
-  refine (ringHom_ext_Z ?_ ?_).symm
-  · simp only [aux2, RingHom.coe_comp, Function.comp_apply, map_natCast]
-  · rw [aux2]; exact nat_mod_pow_nilp
+  refine fun _ _ _ ↦ (ringHom_ext_Z ?_ ?_).symm
+  · simp only [toZModPow_X, RingHom.coe_comp, Function.comp_apply, map_natCast]
+  · rw [toZModPow_X]; exact nat_mod_pow_nilp
 
 def I (a : ℕ): Ideal ℤ⟦X⟧ := Ideal.span {(X : ℤ⟦X⟧) - a}
 -- def PSZquot := ℤ⟦X⟧ ⧸ I p
@@ -60,7 +62,7 @@ def I (a : ℕ): Ideal ℤ⟦X⟧ := Ideal.span {(X : ℤ⟦X⟧) - a}
 
 theorem toZModPow_I_zero_aux {a n : ℕ} :
     (toZModPow a n) ((X : ℤ⟦X⟧) - a) = 0 := by
-  simp only [map_sub, aux2, map_natCast, sub_self]
+  simp only [map_sub, toZModPow_X, map_natCast, sub_self]
 
 theorem I_le_ker_toZMod_aux {a n : ℕ} :
     (X : ℤ⟦X⟧) - a ∈ RingHom.ker (toZModPow a n) :=
@@ -89,15 +91,6 @@ instance instFintypeQuotKerToZModPow {a n : ℕ} :
   elems := sorry
   complete := sorry
 
--- morphism bwtween quotients
-def quotHom (a : ℕ) {m n : ℕ} (mlen : m ≤ n) :
-    ℤ⟦X⟧ ⧸ kerToZModPow a n →+* ℤ⟦X⟧ ⧸ kerToZModPow a m where
-  toFun := sorry
-  map_one' := sorry
-  map_mul' := sorry
-  map_zero' := sorry
-  map_add' := sorry
-
 theorem quot_kerToZModPow_card {a n : ℕ} :
     Fintype.card (ℤ⟦X⟧ ⧸ kerToZModPow a n) = a ^ n := by
   sorry
@@ -110,12 +103,18 @@ def zmodEquivQuot (a n : ℕ) :
     ZMod (a ^ n) ≃+* ℤ⟦X⟧ ⧸ kerToZModPow a n :=
   ZMod.ringEquiv _ quot_kerToZModPow_card
 
+example {R S : Type} [CommRing R] [CommRing S] (h : R ≃+* S) : S →+* R :=
+  h.symm.toRingHom
+example {a : ℕ} {m n : ℕ} (mlen : m ≤ n) : ZMod (a ^ n) →+* ZMod (a ^ m) := ZMod.castHom (pow_dvd_pow a mlen) (ZMod (a ^ m))
+
+-- morphism bwtween quotients
+def quotHom (a : ℕ) {m n : ℕ} (mlen : m ≤ n) :
+    ℤ⟦X⟧ ⧸ kerToZModPow a n →+* ℤ⟦X⟧ ⧸ kerToZModPow a m :=
+  ((zmodEquivQuot a m).toRingHom.comp (ZMod.castHom (pow_dvd_pow a mlen) (ZMod (a ^ m)))).comp (zmodEquivQuot a n).symm.toRingHom
+
 theorem kerToZModPow_eq_ker {a n : ℕ} :
     RingHom.ker (toZModPow a n) = kerToZModPow a n := by
-  ext f; constructor
-  · sorry
-  · sorry
-
+  sorry
 
 -- The morphism `ℤ⟦X⟧ ⧸ (X - a) → ℤ ⧸ a ^ n` mapping `X` to `a` induced from `toZModPow`
 def quotI_toZModPow (a n : ℕ) :
@@ -131,19 +130,19 @@ end toZMod
 section toPadic
 
 -- Define the canonical morphism `ℤ⟦X⟧ → ℤ_[p]` using the universal property of `ℤ_[p]`.
-def toPadicInt : PowerSeries ℤ →+* ℤ_[p] :=
-    lift toZModPow_compat
+def toPadicInt : ℤ⟦X⟧ →+* ℤ_[p] :=
+  lift toZModPow_compat
 
 theorem toPadicInt_surj :
     Function.Surjective (toPadicInt p) := by
   intro b
-  let f : ℤ⟦X⟧ := PowerSeries.mk fun
+  use PowerSeries.mk fun
     | .zero => 0
     | .succ n => (appr b (n + 1) - appr b n) / p ^ n
   /-
   goal: `f.toPadicInt p = b`
   the coeff of `f` forms a p adic expansion of `b`
-  BUT, due to the def of `Nat.div` this def unlikely works......
+  BUT, due to the def of `Nat.div`, this def unlikely works......
   -/
   sorry
 
@@ -152,16 +151,13 @@ theorem ker_toPadicInt :
   ext f; constructor
   · intro h
     sorry
-  · intro h
-    apply ext_of_toZModPow.mp
+  · refine fun h ↦ ext_of_toZModPow.mp ?_
     intro n
     rw [map_zero]
     calc
       _ = (PadicInt.toZModPow n).comp (toPadicInt p) f := by sorry
       _ = (toZModPow p n) f := sorry
       _ = 0 := toZModPow_I_zero h
-
-    -- rw [lift_spec _ n]
 
 end toPadic
 #check ZMod.ringEquiv

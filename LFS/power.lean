@@ -1,24 +1,20 @@
 /-
 Current goals :
-1. prove `eval₂_mul`
-2. prove `PowerSeries.ringHom_ext_Z`
+1. prove `trunc_mul`
+2. prove `ringHom_ext`
 
-The explicit parameter `R` with `CommRing R` in
+The explicit parameter `R` with `[CommRing R]` in
 PowerSeries might causes some incompatibility of
 notations in this file. Will be fix later.
 
 How to `rw` a term in a finsum?
 -/
 
-
-import Mathlib.NumberTheory.Padics.RingHoms
-import Mathlib.Algebra.BigOperators.Ring
-import Mathlib.RingTheory.PowerSeries.WellKnown
-import Mathlib.RingTheory.Nilpotent
+import Mathlib.Tactic
 
 import LFS.trivia
 
-open PadicInt Classical
+open Classical
 
 section
 
@@ -36,7 +32,6 @@ noncomputable section trunc
 --   rw [← Polynomial.coeff_inj]
 --   ext k
 --   rw [coeff_trunc _ _ _]
---   sorry
 
 def truncAddMonoidHom (n : ℕ): PowerSeries R →+ Polynomial R where
   toFun := trunc n
@@ -47,9 +42,9 @@ def truncAddMonoidHom (n : ℕ): PowerSeries R →+ Polynomial R where
 theorem trunc_sub {φ : PowerSeries R} {m n : ℕ} (h : m ≤ n) : φ.trunc n - φ.trunc m = (Finset.Ico m n).sum fun k ↦ Polynomial.monomial k (coeff R k φ) := by
   apply Polynomial.coeff_inj.mp
   ext k
-  rw [Polynomial.coeff_sub, Polynomial.finset_sum_coeff]
-  rw [coeff_trunc, coeff_trunc]
-  simp [Polynomial.coeff_monomial]
+  rw [Polynomial.coeff_sub, Polynomial.finset_sum_coeff,
+    coeff_trunc, coeff_trunc]
+  simp only [Polynomial.coeff_monomial, Finset.sum_ite_eq', Finset.mem_Ico]
   by_cases hkm : k < m
   · simp only [lt_of_lt_of_le hkm h, ite_true, hkm, sub_self, and_true, if_neg (not_le.mpr hkm)]
   by_cases hkn : k < n
@@ -61,17 +56,28 @@ theorem trunc_sub {φ : PowerSeries R} {m n : ℕ} (h : m ≤ n) : φ.trunc n - 
 theorem trunc_sub' {φ : PowerSeries R} {m n : ℕ} (h : m ≤ n) : φ.trunc n = φ.trunc m + (Finset.Ico m n).sum fun k ↦ Polynomial.monomial k (coeff R k φ) :=
   sub_eq_iff_eq_add'.mp (trunc_sub h)
 
+
 theorem trunc_monomial {m n : ℕ} (a : R): (monomial R m a).trunc n = if m < n then Polynomial.monomial m a else 0 := by
   ext k
   rw [coeff_trunc, coeff_monomial]
   split_ifs with h1 h2 h3
   · rw [Polynomial.coeff_monomial, if_pos h2.symm]
   · exfalso; linarith
-  · rw [Polynomial.coeff_monomial, if_neg]
-    exact fun a ↦ h2 a.symm
+  · rw [Polynomial.coeff_monomial, if_neg]; exact fun a ↦ h2 a.symm
   · exact (Polynomial.coeff_zero _).symm
   · rw [Polynomial.coeff_monomial, if_neg]; linarith
   · exact (Polynomial.coeff_zero _).symm
+
+theorem trunc_mul {n n1 n2 : ℕ} {φ ψ : R⟦X⟧} (h1 : n ≤ n1) (h2 : n ≤ n2) :
+    (φ * ψ).trunc n = (φ.trunc n1 * ψ.trunc n2).trunc n := by
+  ext k
+  rw [coeff_trunc]
+  sorry
+
+
+theorem trunc_mul' {n : ℕ} {φ ψ : R⟦X⟧} :
+    (φ * ψ).trunc n = (φ.trunc n * ψ.trunc n).trunc n :=
+  trunc_mul n.le_refl n.le_refl
 
 end trunc
 
@@ -110,10 +116,10 @@ theorem eval₂_at_zero {φ : PowerSeries R} : φ.eval₂ f ⟨0, IsNilpotent.ze
   simp only [eval₂, Submodule.zero_eq_bot, Ideal.mem_bot, Polynomial.eval₂_at_zero, coeff_trunc]
   congr 1
   simp only [coeff_zero_eq_constantCoeff, ite_eq_left_iff, not_lt, nonpos_iff_eq_zero]
-  contrapose!; intro
-  apply choose_IsNilpotent_ne_zero IsNilpotent.zero
+  contrapose!
+  exact fun _ ↦ choose_IsNilpotent_ne_zero IsNilpotent.zero
 
-theorem eval₂_zero : (0 : PowerSeries R).eval₂ f s = 0 := by
+theorem eval₂_zero : (0 : R⟦X⟧).eval₂ f s = 0 := by
   simp only [eval₂, Submodule.zero_eq_bot, Ideal.mem_bot, trunc_zero, Polynomial.eval₂_zero]
 
 -- #check Polynomial.eval₂_monomial
@@ -122,8 +128,7 @@ theorem eval₂_monomial {n : ℕ} {a : R} : (monomial R n a).eval₂ f s = f a 
   split
   · simp only [map_zero, zero_mul, Polynomial.sum_monomial_index]
   · rw [Polynomial.sum_zero_index]
-    refine (mul_eq_zero_of_right (f a) ?_).symm
-    apply nilp_pow_ge_choose_eq_zero
+    refine (mul_eq_zero_of_right (f a) (nilp_pow_ge_choose_eq_zero ?_)).symm
     linarith
 
 -- #check Polynomial.eval₂_C
@@ -133,7 +138,7 @@ theorem eval₂_C {a : R} : (C R a).eval₂ f s = f a := by
 
 -- #check Polynomial.eval₂_X
 theorem eval₂_X : X.eval₂ f s = s := by
-  rw [X_eq, eval₂_monomial]
+  rewrite [X_eq, eval₂_monomial]
   simp only [map_one, pow_one, one_mul]
 
 -- #check Polynomial.eval₂_X_pow
@@ -142,8 +147,7 @@ theorem eval₂_X_pow {n : ℕ} : (X ^ n : PowerSeries R).eval₂ f s = s.1 ^ n 
 
 -- #check Polynomial.eval₂_add
 theorem eval₂_add {φ ψ : PowerSeries R} : (φ + ψ).eval₂ f s = φ.eval₂ f s + ψ.eval₂ f s := by
-  rw [eval₂, eval₂, eval₂,
-      ← Polynomial.eval₂_add, trunc_add]
+  rw [eval₂, eval₂, eval₂, ← Polynomial.eval₂_add, trunc_add]
 
 @[simp]
 def eval₂AddMonoidHom : PowerSeries R →+ S where
@@ -154,15 +158,15 @@ def eval₂AddMonoidHom : PowerSeries R →+ S where
 -- #check PowerSeries.C R (1 : R)
 -- #check Polynomial.C (1 : R)
 theorem eval₂_one : (1 : PowerSeries R).eval₂ f s = 1 := by
-  rw [show (1 : PowerSeries R) = C R (1 : R) by rfl, eval₂_C, f.map_one]
+  rw [show 1 = C R 1 from rfl, eval₂_C, f.map_one]
 
 #check Polynomial.eval₂_mul
 theorem eval₂_mul {φ ψ : PowerSeries R} : (φ * ψ).eval₂ f s = φ.eval₂ f s * ψ.eval₂ f s := by
-  rw [eval₂, eval₂, eval₂, ← Polynomial.eval₂_mul]
-  simp [Polynomial.eval₂_eq_sum]
-  sorry
+  rw [eval₂, eval₂, eval₂, ← Polynomial.eval₂_mul,
+    trunc_mul', Polynomial.eval₂_trunc_at_nilp]
+  exact choose_spec s.2
 
--- For a nilpotent element `s : S`, assignment `X ↦ s` defines a ring homomorphism `PowerSeries R → S`
+-- For a nilpotent element `s : S`, the assignment `X ↦ s` defines a ring homomorphism `R⟦X⟧ →+* S`
 @[simp]
 def eval₂RingHom : PowerSeries R →+* S := {
   eval₂AddMonoidHom f s with
